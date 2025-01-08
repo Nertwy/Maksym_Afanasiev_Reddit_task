@@ -1,7 +1,7 @@
 #!/bin/bash
 
 pythonPath="./venv/bin/python"
-scriptPath="C:/Users/Denis/Projects/Maksym_Afanasiev_Reddit_task/main.py"
+scriptPath="absolute_path_to_main.py/main.py"
 
 # Prompt for user input
 read -p "Enter the input URL path: " inputUrlPath

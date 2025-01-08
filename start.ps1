@@ -1,5 +1,5 @@
 $pythonPath = ".\venv\Scripts\python.exe"
-$scriptPath = "C:\Users\Denis\Projects\Maksym_Afanasiev_Reddit_task\main.py"
+$scriptPath = "absolute_path_to_main.py\main.py"
 $inputUrlPath = Read-Host "Enter the input URL path"
 $outputFilePath = Read-Host "Enter the output file path"
 & $pythonPath $scriptPath $inputUrlPath $outputFilePath
