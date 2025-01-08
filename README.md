@@ -67,9 +67,11 @@ Clone the git repository or extract it from a .zip file.
     ```ps1
     .\start.ps1
     ```
+    **Important Note:** Change scriptpath to your path in <b><i>start.ps1<b><i> file
 2. Run the [start.sh](http://_vscodecontentref_/7) script on Linux:
     ```sh
     ./start.sh
     ```
+    **Important Note:** Change scriptpath to your path in <b><i>start.sh<b><i> file
 
 3. Follow the prompts to enter the input URL path and output file path.
