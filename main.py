@@ -9,7 +9,7 @@ from openpyxl import Workbook, load_workbook
 from dotenv import load_dotenv
 import asyncpraw
 from rate_limiter import APIRateLimiter
-
+from openpyxl.worksheet.worksheet import Worksheet
 
 load_dotenv(dotenv_path=".env")
 
@@ -17,10 +17,26 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-rate_limit = APIRateLimiter(logger,max_retries=3, initial_delay=5.0)
+rate_limit = APIRateLimiter(logger, max_retries=3, initial_delay=1.0)
+
 
 class RedditAPIClient:
-    def __init__(self, read_file_path, write_file_path):
+    """
+    A client for interacting with Reddit's API and processing submission data.
+
+    Attributes:
+        reddit (asyncpraw.Reddit): Reddit API client instance
+        xlsxclient (ExcelHandler): Excel file handler for data I/O
+    """
+
+    def __init__(self, read_file_path: str, write_file_path: str) -> None:
+        """
+        Initialize the Reddit API client.
+
+        Args:
+            read_file_path: Path to input Excel file
+            write_file_path: Path to output Excel file
+        """
         self.reddit = asyncpraw.Reddit(
             client_id=os.getenv("CLIENT_ID"),
             client_secret=os.getenv("CLIENT_SECRET"),
@@ -28,14 +44,21 @@ class RedditAPIClient:
         )
         self.xlsxclient = ExcelHandler(read_file_path, write_file_path)
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> 'RedditAPIClient':
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: None | type, exc_val: None | BaseException, exc_tb: None | object) -> None:
         await self.reddit.close()
 
     @rate_limit.rate_limit
-    async def get_submission_comments(self, submission_url: str, traffic: str):
+    async def get_submission_comments(self, submission_url: str, traffic: str) -> None:
+        """
+        Fetch and process comments for a given submission URL.
+        If the submission is locked or archived, it is skipped.
+        Args:
+            submission_url: Reddit submission URL to process
+            traffic: Traffic category of the submission
+        """
         try:
             submission = await self.reddit.submission(url=submission_url)
         except asyncpraw.exceptions.InvalidURL:
@@ -49,13 +72,13 @@ class RedditAPIClient:
         logger.info(
             f"Successfully processed submission: {submission_url} with {comments_count} comments")
 
-    async def _write_comments_to_excel(self, submission_url: str, comments_count: int, traffic: str):
+    async def _write_comments_to_excel(self, submission_url: str, comments_count: int, traffic: str) -> None:
         if comments_count == 0:
             await self.xlsxclient.write_data_to_sheet([submission_url, 0, traffic], "No comments")
         elif 1 <= comments_count <= 3:
             await self.xlsxclient.write_data_to_sheet([submission_url, comments_count, traffic], "3 or less comments")
 
-    async def run(self, skip_header: bool = True):
+    async def run(self, skip_header: bool = True) -> None:
         data = await self.xlsxclient.read_data()
         if data is None:
             logger.warning("No data to process in file!")
@@ -76,13 +99,30 @@ class RedditAPIClient:
 
 
 class ExcelHandler:
-    def __init__(self, read_file_path: str, write_file_path: str):
+    """
+    Handles Excel file operations for reading and writing Reddit data.
+
+    Attributes:
+        read_file_path (str): Path to input Excel file
+        write_file_path (str): Path to output Excel file
+        read_workbook: Loaded workbook for reading
+        write_workbook: Workbook for writing results
+    """
+
+    def __init__(self, read_file_path: str, write_file_path: str) -> None:
+        """
+        Initialize the Excel handler.
+
+        Args:
+            read_file_path: Path to input Excel file
+            write_file_path: Path to output Excel file
+        """
         self.read_file_path = read_file_path
         self.write_file_path = write_file_path
-        self.read_workbook = None
-        self.write_workbook = Workbook()
+        self.read_workbook: None | Workbook = None
+        self.write_workbook: Workbook = Workbook()
 
-    async def read_data(self):
+    async def read_data(self) -> None | dict[str, list[list[str | int]]]:
         try:
             self.read_workbook = load_workbook(self.read_file_path)
             return await self._extract_data_from_workbook()
@@ -94,8 +134,8 @@ class ExcelHandler:
         except Exception as e:
             logger.error(f"Error reading file: {e}")
 
-    async def _extract_data_from_workbook(self):
-        data = {}
+    async def _extract_data_from_workbook(self) -> dict[str, list[list[str | int]]]:
+        data: dict[str, list[list[str | int]]] = {}
         for sheet_name in self.read_workbook.sheetnames:
             sheet = self.read_workbook[sheet_name]
             data[sheet_name] = [
@@ -103,15 +143,15 @@ class ExcelHandler:
             ]
         return data
 
-    async def write_data_to_sheet(self, row_data: list, sheet_name):
+    async def write_data_to_sheet(self, row_data: list[str | int], sheet_name: str) -> None:
         sheet = await self._get_or_create_sheet(sheet_name)
         sheet.append(row_data)
         await self._save_workbook()
 
-    async def _save_workbook(self):
+    async def _save_workbook(self) -> None:
         self.write_workbook.save(self.write_file_path)
 
-    async def _get_or_create_sheet(self, sheet_name):
+    async def _get_or_create_sheet(self, sheet_name: str) -> Worksheet:
         if sheet_name in self.write_workbook.sheetnames:
             return self.write_workbook[sheet_name]
         else:
@@ -119,23 +159,23 @@ class ExcelHandler:
             sheet.append(["URL", "Number of comments", "Traffic"])
             return sheet
 
-    async def sort_output_by_traffic(self):
+    async def sort_output_by_traffic(self) -> None:
         for sheet_name in self.write_workbook.sheetnames:
             sheet = self.write_workbook[sheet_name]
             sorted_data = await self._sort_sheet_data_by_traffic(sheet)
             await self._replace_sheet_data(sheet, sorted_data)
         await self._save_workbook()
 
-    async def _sort_sheet_data_by_traffic(self, sheet):
+    async def _sort_sheet_data_by_traffic(self, sheet: Worksheet) -> list[tuple[str | int, ...]]:
         return sorted(sheet.iter_rows(min_row=2, values_only=True), key=lambda x: x[2], reverse=True)
 
-    async def _replace_sheet_data(self, sheet, sorted_data):
+    async def _replace_sheet_data(self, sheet: Worksheet, sorted_data: list[tuple[str | int, ...]]) -> None:
         sheet.delete_rows(2, sheet.max_row)
         for row in sorted_data:
             sheet.append(row)
 
 
-async def main():
+async def main() -> None:
     start_time = time.time()
     try:
         async with RedditAPIClient(read_file_path=input_read_file_path,
