@@ -60,39 +60,56 @@ class ExcelHandler:
     def read_data(self):
         try:
             self.read_workbook = load_workbook(self.read_file_path)
-            data = {}
-            for sheet_name in self.read_workbook.sheetnames:
-                sheet = self.read_workbook[sheet_name]
-                data[sheet_name] = [
-                    [cell.value for cell in row] for row in sheet.iter_rows()
-                ]
-            return data
+            return self._extract_data_from_workbook()
         except FileNotFoundError:
             logger.error(f"Error: File '{self.read_file_path}' not found.")
         except InvalidFileException:
-            logger.error("Error: Invalid file format. Please provide an Excel file.")
+            logger.error(
+                "Error: Invalid file format. Please provide an Excel file.")
         except Exception as e:
             logger.error(f"Error reading file: {e}")
 
+    def _extract_data_from_workbook(self):
+        data = {}
+        for sheet_name in self.read_workbook.sheetnames:
+            sheet = self.read_workbook[sheet_name]
+            data[sheet_name] = [
+                [cell.value for cell in row] for row in sheet.iter_rows()
+            ]
+        return data
+
     def write_data_to_sheet(self, row_data: list, sheet_name):
-        sheet = self.write_workbook[sheet_name] if sheet_name in self.write_workbook.sheetnames else self.write_workbook.create_sheet(sheet_name)
-        if sheet.max_row == 1:
-            sheet.append(["URL", "Number of comments", "Traffic"])
+        sheet = self._get_or_create_sheet(sheet_name)
         sheet.append(row_data)
         self.write_workbook.save(self.write_file_path)
+
+    def _get_or_create_sheet(self, sheet_name):
+        if sheet_name in self.write_workbook.sheetnames:
+            return self.write_workbook[sheet_name]
+        else:
+            sheet = self.write_workbook.create_sheet(sheet_name)
+            sheet.append(["URL", "Number of comments", "Traffic"])
+            return sheet
 
     def sort_output_by_traffic(self):
         for sheet_name in self.write_workbook.sheetnames:
             sheet = self.write_workbook[sheet_name]
-            sorted_data = sorted(sheet.iter_rows(min_row=2, values_only=True), key=lambda x: x[2], reverse=True)
-            sheet.delete_rows(2, sheet.max_row)
-            for row in sorted_data:
-                sheet.append(row)
+            sorted_data = self._sort_sheet_data_by_traffic(sheet)
+            self._replace_sheet_data(sheet, sorted_data)
         self.write_workbook.save(self.write_file_path)
+
+    def _sort_sheet_data_by_traffic(self, sheet):
+        return sorted(sheet.iter_rows(min_row=2, values_only=True), key=lambda x: x[2], reverse=True)
+
+    def _replace_sheet_data(self, sheet, sorted_data):
+        sheet.delete_rows(2, sheet.max_row)
+        for row in sorted_data:
+            sheet.append(row)
 
 
 if __name__ == "__main__":
     input_read_file_path = sys.argv[1]
     output_file_path = sys.argv[2]
-    reddit_script = RedditAPIClient(read_file_path=input_read_file_path, write_file_path=output_file_path)
+    reddit_script = RedditAPIClient(
+        read_file_path=input_read_file_path, write_file_path=output_file_path)
     reddit_script.run()
