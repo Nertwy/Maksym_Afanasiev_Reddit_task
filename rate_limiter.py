@@ -78,6 +78,5 @@ class APIRateLimiter:
                             self.logger.error(
                                 f"Max retries ({self.max_retries}) exceeded for {args[1]}.")
                             raise e
-                        await self.wait_with_jitter(retries, self.initial_delay)
-            return await func(*args, **kwargs)
+                        await self.wait_with_jitter(retries, self.initial_delay + int(e.response.headers.get("x-ratelimit-reset", 0)))
         return wrapper

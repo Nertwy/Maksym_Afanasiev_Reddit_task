@@ -4,6 +4,7 @@ import logging
 import asyncio
 import time
 import asyncpraw.exceptions
+from asyncprawcore.exceptions import Forbidden
 from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl import Workbook, load_workbook
 from dotenv import load_dotenv
@@ -64,6 +65,10 @@ class RedditAPIClient:
         except asyncpraw.exceptions.InvalidURL:
             logger.warning(
                 f"Invalid submission URL: {submission_url}. Skipping...")
+            return
+        except Forbidden:
+            logger.warning(
+                f"Access denied for submission: {submission_url}. Skipping...")
             return
         if submission.locked or submission.archived:
             return
